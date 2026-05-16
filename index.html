@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>FlashBlitz — Flashcard Maker</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#06090f;--card:#0c1220;--border:#1a2840;
+  --text:#e2e8f0;--dim:#64748b;--sub:#94a3b8;
+  --blue:#3b82f6;--green:#22c55e;--yellow:#f59e0b;--red:#ef4444;--purple:#a78bfa;--cyan:#22d3ee;
+}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;overflow-x:hidden}
+#stars{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.star{position:absolute;border-radius:50%;background:#fff;animation:twinkle var(--d,3s) var(--delay,0s) infinite alternate}
+@keyframes twinkle{from{opacity:.1}to{opacity:.6}}
+
+nav{position:sticky;top:0;z-index:100;background:#06090fee;backdrop-filter:blur(16px);border-bottom:1px solid var(--border);padding:0 20px;display:flex;align-items:center;gap:10px;height:56px}
+.nav-back{font-size:.8rem;font-weight:700;color:var(--dim);text-decoration:none;padding:5px 12px;border:1px solid var(--border);border-radius:20px;transition:color .2s;white-space:nowrap}
+.nav-back:hover{color:var(--text)}
+.nav-title{font-size:1.1rem;font-weight:900;background:linear-gradient(90deg,var(--cyan),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-right:auto;white-space:nowrap}
+
+.screen{display:none;position:relative;z-index:1}
+.screen.active{display:block}
+
+/* HOME */
+.home{max-width:900px;margin:0 auto;padding:40px 20px}
+.home h1{font-size:2rem;font-weight:900;margin-bottom:6px}
+.home-sub{color:var(--sub);margin-bottom:32px}
+.home-actions{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:40px}
+.btn{padding:11px 24px;border-radius:50px;border:none;font-weight:700;font-size:.9rem;cursor:pointer;transition:all .2s}
+.btn:hover{transform:translateY(-2px);filter:brightness(1.1)}
+.btn-cyan{background:linear-gradient(135deg,var(--cyan),var(--blue));color:#000}
+.btn-purple{background:linear-gradient(135deg,var(--purple),#6d28d9);color:#fff}
+.btn-ghost{background:var(--card);border:1px solid var(--border);color:var(--text)}
+.btn-green{background:linear-gradient(135deg,var(--green),#15803d);color:#fff}
+.btn-red{background:var(--red);color:#fff}
+
+.section-label{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--cyan);margin-bottom:12px}
+
+/* DECK LIST */
+.deck-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:28px}
+.deck-card{background:var(--card);border:2px solid var(--border);border-radius:18px;padding:20px;cursor:pointer;transition:all .25s;position:relative}
+.deck-card:hover{transform:translateY(-3px);border-color:var(--cyan)}
+.deck-name{font-size:1rem;font-weight:800;margin-bottom:4px}
+.deck-count{font-size:.78rem;color:var(--dim)}
+.deck-actions{display:flex;gap:6px;margin-top:12px}
+.deck-btn{padding:5px 12px;border-radius:20px;border:none;font-size:.75rem;font-weight:700;cursor:pointer;transition:all .2s}
+.deck-study{background:#0a1830;color:var(--cyan);border:1px solid var(--cyan)}
+.deck-edit{background:#1a0a2e;color:var(--purple);border:1px solid var(--purple)}
+.deck-share{background:#0a1f10;color:var(--green);border:1px solid var(--green)}
+.deck-delete{background:#1f0a0a;color:var(--red);border:1px solid var(--red)}
+.deck-code{font-size:.7rem;color:var(--dim);margin-top:6px}
+
+.empty-state{text-align:center;padding:40px;color:var(--dim)}
+.empty-icon{font-size:3rem;margin-bottom:12px}
+
+/* JOIN SHARED */
+.join-bar{display:flex;gap:10px;margin-bottom:32px}
+input[type=text],input[type=number],textarea{background:#111827;border:1px solid var(--border);color:#fff;border-radius:10px;padding:10px 14px;font-size:.9rem;outline:none;transition:border-color .2s;font-family:inherit}
+input:focus,textarea:focus{border-color:var(--blue)}
+
+/* EDITOR */
+.editor{max-width:700px;margin:0 auto;padding:30px 20px}
+.editor-header{display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+.editor-header h2{font-size:1.4rem;font-weight:900;flex:1}
+#deck-name-input{font-size:1rem;font-weight:700;background:#111827;border:1px solid var(--border);color:#fff;border-radius:8px;padding:8px 14px;width:100%;margin-bottom:16px;outline:none}
+#deck-name-input:focus{border-color:var(--cyan)}
+
+.card-editor-list{margin-bottom:16px;max-height:60vh;overflow-y:auto}
+.card-row{display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;background:#0a0e18;border:1px solid var(--border);border-radius:10px;padding:10px}
+.card-row-num{font-size:.7rem;color:var(--dim);font-weight:700;width:20px;margin-top:4px;flex-shrink:0}
+.card-inputs{flex:1;display:flex;gap:8px;flex-wrap:wrap}
+.card-inputs input{flex:1;min-width:120px;padding:7px 10px;font-size:.85rem}
+.card-del{background:transparent;border:none;color:var(--dim);cursor:pointer;font-size:1.1rem;padding:4px 6px;border-radius:6px;transition:color .2s;align-self:flex-start;margin-top:2px}
+.card-del:hover{color:var(--red)}
+
+/* STUDY */
+.study{max-width:560px;margin:0 auto;padding:30px 20px;text-align:center}
+.study-hud{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 18px;font-size:.85rem}
+.study-hud-item{text-align:center}
+.study-hud-val{font-size:1.2rem;font-weight:900}
+.study-hud-lbl{font-size:.62rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+
+.progress-bar{height:4px;background:var(--border);border-radius:2px;margin-bottom:24px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--cyan),var(--purple));transition:width .4s}
+
+/* 3D Flip Card */
+.flip-container{perspective:1000px;height:220px;margin-bottom:20px;cursor:pointer}
+.flip-card{width:100%;height:100%;position:relative;transform-style:preserve-3d;transition:transform .5s cubic-bezier(.4,0,.2,1)}
+.flip-card.flipped{transform:rotateY(180deg)}
+.flip-face{position:absolute;inset:0;backface-visibility:hidden;border-radius:20px;display:flex;align-items:center;justify-content:center;padding:24px;font-size:1.2rem;font-weight:700;line-height:1.5;text-align:center}
+.flip-front{background:var(--card);border:2px solid var(--cyan)}
+.flip-back{background:#0a1830;border:2px solid var(--purple);transform:rotateY(180deg);color:var(--purple)}
+.flip-hint{font-size:.78rem;color:var(--dim);margin-bottom:16px}
+
+.know-btns{display:flex;gap:12px;justify-content:center;margin-bottom:24px}
+.know-btn{padding:12px 28px;border-radius:50px;border:none;font-weight:700;cursor:pointer;transition:all .2s;font-size:.95rem}
+.know-btn:hover{transform:scale(1.05)}
+.know-yes{background:#0a2010;color:var(--green);border:2px solid var(--green)}
+.know-no{background:#1f0a0a;color:var(--red);border:2px solid var(--red)}
+.know-skip{background:var(--card);color:var(--sub);border:1px solid var(--border)}
+
+/* STUDY DONE */
+.study-done{text-align:center;padding:20px}
+.done-icon{font-size:4rem;animation:pop .4s ease-out;margin-bottom:12px}
+@keyframes pop{from{transform:scale(0)}to{transform:scale(1)}}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e293b;border:1px solid var(--border);border-radius:50px;padding:10px 24px;font-size:.9rem;font-weight:600;z-index:999;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+
+.share-code-box{background:var(--card);border:2px solid var(--green);border-radius:14px;padding:16px 20px;text-align:center;margin:16px 0}
+.share-code{font-size:2.2rem;font-weight:900;letter-spacing:6px;color:var(--green)}
+.share-hint{font-size:.78rem;color:var(--dim);margin-top:4px}
+</style>
+</head>
+<body>
+<div id="stars"></div>
+<nav>
+  <a href="https://eppeok.github.io" class="nav-back">← All Tools</a>
+  <div class="nav-title">🃏 FlashBlitz</div>
+  <a href="https://eppeok.github.io/student-dashboard/" class="nav-back">Dashboard</a>
+</nav>
+
+<!-- HOME -->
+<div id="screen-home" class="screen active">
+<div class="home">
+  <h1>🃏 FlashBlitz</h1>
+  <p class="home-sub">Make flashcard decks, study them, share with your class.</p>
+
+  <div class="home-actions">
+    <button class="btn btn-cyan" onclick="newDeck()">+ New Deck</button>
+    <button class="btn btn-ghost" onclick="showScreen('import')">↓ Import Shared Deck</button>
+  </div>
+
+  <div class="section-label">Your Decks</div>
+  <div class="deck-grid" id="deck-grid">
+    <div class="empty-state"><div class="empty-icon">🃏</div><div>No decks yet — create one!</div></div>
+  </div>
+</div>
+</div>
+
+<!-- IMPORT SCREEN -->
+<div id="screen-import" class="screen">
+<div class="home">
+  <h2 style="font-size:1.5rem;font-weight:900;margin-bottom:8px">Import a Shared Deck</h2>
+  <p class="home-sub">Enter the 6-character code your teacher gave you.</p>
+  <div class="join-bar">
+    <input type="text" id="import-code" placeholder="ABC123" maxlength="6" style="font-size:1.2rem;font-weight:700;letter-spacing:4px;text-transform:uppercase;width:160px;text-align:center"/>
+    <button class="btn btn-cyan" onclick="importDeck()">Import →</button>
+  </div>
+  <button class="btn btn-ghost" onclick="showScreen('home')">← Back</button>
+</div>
+</div>
+
+<!-- EDITOR -->
+<div id="screen-editor" class="screen">
+<div class="editor">
+  <div class="editor-header">
+    <h2>✏️ Edit Deck</h2>
+    <button class="btn btn-ghost" onclick="showScreen('home')">Cancel</button>
+    <button class="btn btn-cyan" onclick="saveDeck()">Save ✓</button>
+  </div>
+  <input type="text" id="deck-name-input" placeholder="Deck name (e.g. Chapter 5 Vocab)"/>
+  <div class="card-editor-list" id="card-editor-list"></div>
+  <button class="btn btn-ghost" style="width:100%;margin-bottom:12px" onclick="addCardRow()">+ Add Card</button>
+  <button class="btn btn-green" style="width:100%" onclick="saveDeck()">Save Deck ✓</button>
+</div>
+</div>
+
+<!-- STUDY -->
+<div id="screen-study" class="screen">
+<div class="study">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h2 id="study-deck-name" style="font-size:1.1rem;font-weight:800"></h2>
+    <button class="btn btn-ghost" style="padding:6px 14px;font-size:.8rem" onclick="showScreen('home')">✕ Exit</button>
+  </div>
+
+  <div class="study-hud">
+    <div class="study-hud-item">
+      <div class="study-hud-val" id="study-progress">1/10</div>
+      <div class="study-hud-lbl">Card</div>
+    </div>
+    <div class="study-hud-item">
+      <div class="study-hud-val" id="study-known" style="color:var(--green)">0</div>
+      <div class="study-hud-lbl">Know it</div>
+    </div>
+    <div class="study-hud-item">
+      <div class="study-hud-val" id="study-unknown" style="color:var(--red)">0</div>
+      <div class="study-hud-lbl">Still learning</div>
+    </div>
+  </div>
+
+  <div class="progress-bar"><div class="progress-fill" id="study-prog-fill" style="width:0%"></div></div>
+
+  <div class="flip-hint">Tap the card to flip it</div>
+  <div class="flip-container" onclick="flipCard()">
+    <div class="flip-card" id="flip-card">
+      <div class="flip-face flip-front" id="card-front">Term</div>
+      <div class="flip-face flip-back" id="card-back">Definition</div>
+    </div>
+  </div>
+
+  <div class="know-btns" id="know-btns" style="display:none">
+    <button class="know-btn know-no" onclick="markCard(false)">✗ Still learning</button>
+    <button class="know-btn know-skip" onclick="skipCard()">→ Skip</button>
+    <button class="know-btn know-yes" onclick="markCard(true)">✓ Know it</button>
+  </div>
+  <div id="flip-cta" style="text-align:center;color:var(--dim);font-size:.85rem">Flip first, then rate yourself</div>
+
+  <!-- Done state -->
+  <div id="study-done" style="display:none">
+    <div class="study-done">
+      <div class="done-icon">🎉</div>
+      <h3 style="font-size:1.5rem;font-weight:900;margin-bottom:8px">Round complete!</h3>
+      <p id="study-done-text" style="color:var(--sub);margin-bottom:24px"></p>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+        <button class="btn btn-cyan" onclick="studyAgain(false)">Study Again</button>
+        <button class="btn btn-purple" onclick="studyAgain(true)">Only Wrong Cards</button>
+        <button class="btn btn-ghost" onclick="showScreen('home')">Back to Decks</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="toast" id="toast" style="opacity:0"></div>
+
+<script>
+let db;
+try{
+  if(!firebase.apps.length){
+    firebase.initializeApp({
+      apiKey:"AIzaSyAfflbNLrrn95tPvLW0bzR8Q4iAqOKUOrM",
+      authDomain:"sdvb-d16b2.firebaseapp.com",
+      databaseURL:"https://sdvb-d16b2-default-rtdb.firebaseio.com",
+      projectId:"sdvb-d16b2",
+      storageBucket:"sdvb-d16b2.firebasestorage.app",
+      messagingSenderId:"1007920126855",
+      appId:"1:1007920126855:web:4d5fd1d73d311bd694d122"
+    });
+  }
+  db=firebase.database();
+}catch(e){console.warn('Firebase',e);}
+
+// Stars
+(()=>{const c=document.getElementById('stars');for(let i=0;i<80;i++){const s=document.createElement('div');s.className='star';const sz=Math.random()*2+1;s.style.cssText=`width:${sz}px;height:${sz}px;left:${Math.random()*100}%;top:${Math.random()*100}%;--d:${2+Math.random()*4}s;--delay:${Math.random()*4}s;opacity:.3`;c.appendChild(s);}})();
+
+let decks=[];
+let editingIdx=-1;
+let studyState={};
+
+function loadDecks(){ try{ decks=JSON.parse(localStorage.getItem('fb_decks')||'[]'); }catch{ decks=[]; } }
+function saveDecksLocal(){ localStorage.setItem('fb_decks',JSON.stringify(decks)); }
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+id).classList.add('active');
+  if(id==='home') renderDeckGrid();
+}
+
+function toast(msg,ms=2500){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.style.opacity='1';
+  setTimeout(()=>el.style.opacity='0',ms);
+}
+
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function genCode(){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let r=''; for(let i=0;i<6;i++) r+=c[Math.floor(Math.random()*c.length)]; return r; }
+
+function renderDeckGrid(){
+  loadDecks();
+  const grid=document.getElementById('deck-grid');
+  if(!decks.length){
+    grid.innerHTML='<div class="empty-state"><div class="empty-icon">🃏</div><div>No decks yet — create one!</div></div>';
+    return;
+  }
+  grid.innerHTML=decks.map((d,i)=>`
+    <div class="deck-card">
+      <div class="deck-name">${escHtml(d.name||'Untitled')}</div>
+      <div class="deck-count">${d.cards.length} card${d.cards.length!==1?'s':''}</div>
+      ${d.shareCode?`<div class="deck-code">Share code: <strong>${d.shareCode}</strong></div>`:''}
+      <div class="deck-actions">
+        <button class="deck-btn deck-study" onclick="studyDeck(${i})">▶ Study</button>
+        <button class="deck-btn deck-edit" onclick="editDeck(${i})">✏️ Edit</button>
+        <button class="deck-btn deck-share" onclick="shareDeck(${i})">🔗 Share</button>
+        <button class="deck-btn deck-delete" onclick="deleteDeck(${i})">🗑</button>
+      </div>
+    </div>`).join('');
+}
+
+function newDeck(){
+  editingIdx=-1;
+  document.getElementById('deck-name-input').value='';
+  document.getElementById('card-editor-list').innerHTML='';
+  addCardRow();addCardRow();addCardRow();
+  showScreen('editor');
+}
+
+function editDeck(i){
+  loadDecks();
+  editingIdx=i;
+  const d=decks[i];
+  document.getElementById('deck-name-input').value=d.name||'';
+  const list=document.getElementById('card-editor-list');
+  list.innerHTML='';
+  (d.cards||[]).forEach((_,j)=>addCardRow(d.cards[j]));
+  if(!d.cards.length){addCardRow();addCardRow();}
+  showScreen('editor');
+}
+
+function addCardRow(card){
+  const list=document.getElementById('card-editor-list');
+  const n=list.children.length+1;
+  const div=document.createElement('div');
+  div.className='card-row';
+  div.innerHTML=`
+    <div class="card-row-num">${n}</div>
+    <div class="card-inputs">
+      <input type="text" placeholder="Term" value="${escHtml(card?.term||'')}" class="card-term"/>
+      <input type="text" placeholder="Definition" value="${escHtml(card?.def||'')}" class="card-def"/>
+    </div>
+    <button class="card-del" onclick="this.closest('.card-row').remove();renumberCards()">✕</button>`;
+  list.appendChild(div);
+}
+
+function renumberCards(){
+  document.querySelectorAll('.card-row-num').forEach((el,i)=>el.textContent=i+1);
+}
+
+function saveDeck(){
+  const name=(document.getElementById('deck-name-input').value||'').trim()||'Untitled';
+  const rows=document.querySelectorAll('.card-row');
+  const cards=[];
+  rows.forEach(row=>{
+    const term=(row.querySelector('.card-term')?.value||'').trim();
+    const def=(row.querySelector('.card-def')?.value||'').trim();
+    if(term||def) cards.push({term,def});
+  });
+  if(!cards.length){toast('Add at least one card!');return;}
+  loadDecks();
+  const deck={name,cards,updatedAt:Date.now()};
+  if(editingIdx>=0){
+    deck.shareCode=decks[editingIdx].shareCode||null;
+    decks[editingIdx]=deck;
+  } else {
+    decks.push(deck);
+  }
+  saveDecksLocal();
+  toast('✅ Deck saved!');
+  showScreen('home');
+}
+
+function deleteDeck(i){
+  if(!confirm('Delete this deck?')) return;
+  loadDecks();
+  decks.splice(i,1);
+  saveDecksLocal();
+  renderDeckGrid();
+}
+
+async function shareDeck(i){
+  loadDecks();
+  const deck=decks[i];
+  if(!db){toast('No internet — can\'t share');return;}
+  if(deck.shareCode){
+    toast('Share code: '+deck.shareCode,4000);
+    return;
+  }
+  const code=genCode();
+  try{
+    await db.ref('flashcards/'+code).set({
+      name:deck.name,
+      cards:deck.cards,
+      createdAt:firebase.database.ServerValue.TIMESTAMP
+    });
+    deck.shareCode=code;
+    decks[i]=deck;
+    saveDecksLocal();
+    renderDeckGrid();
+    toast('📋 Share code: '+code,5000);
+  }catch(e){toast('Could not share — check internet');}
+}
+
+async function importDeck(){
+  const code=(document.getElementById('import-code').value||'').trim().toUpperCase();
+  if(code.length!==6){toast('Enter a 6-character code');return;}
+  if(!db){toast('No internet');return;}
+  try{
+    const snap=await db.ref('flashcards/'+code).once('value');
+    const data=snap.val();
+    if(!data){toast('❌ Deck not found — check the code');return;}
+    loadDecks();
+    const deck={name:data.name||'Imported Deck',cards:data.cards||[],shareCode:code,importedAt:Date.now()};
+    decks.push(deck);
+    saveDecksLocal();
+    toast('✅ Deck imported!');
+    showScreen('home');
+  }catch(e){toast('Could not import — check internet');}
+}
+
+// ── STUDY ──
+function studyDeck(i,cardsOverride){
+  loadDecks();
+  const deck=decks[i];
+  const cards=cardsOverride||[...(deck.cards||[])].sort(()=>Math.random()-.5);
+  if(!cards.length){toast('This deck has no cards!');return;}
+  studyState={deckIdx:i,cards,qi:0,known:0,unknown:0,flipped:false};
+  document.getElementById('study-deck-name').textContent=deck.name;
+  document.getElementById('study-done').style.display='none';
+  document.getElementById('flip-card').parentElement.style.display='block';
+  document.getElementById('study-hud').style.display='flex';
+  document.querySelector('.progress-bar').style.display='block';
+  document.querySelector('.flip-hint').style.display='block';
+  showStudyCard();
+  showScreen('study');
+}
+
+function showStudyCard(){
+  const s=studyState;
+  const card=s.cards[s.qi];
+  document.getElementById('card-front').textContent=card.term||'(no term)';
+  document.getElementById('card-back').textContent=card.def||'(no definition)';
+  document.getElementById('flip-card').classList.remove('flipped');
+  document.getElementById('know-btns').style.display='none';
+  document.getElementById('flip-cta').style.display='block';
+  document.getElementById('study-progress').textContent=`${s.qi+1}/${s.cards.length}`;
+  document.getElementById('study-known').textContent=s.known;
+  document.getElementById('study-unknown').textContent=s.unknown;
+  document.getElementById('study-prog-fill').style.width=(s.qi/s.cards.length*100)+'%';
+  s.flipped=false;
+}
+
+function flipCard(){
+  const s=studyState;
+  if(document.getElementById('study-done').style.display!=='none') return;
+  document.getElementById('flip-card').classList.toggle('flipped');
+  s.flipped=!s.flipped;
+  if(s.flipped){
+    document.getElementById('know-btns').style.display='flex';
+    document.getElementById('flip-cta').style.display='none';
+  }
+}
+
+function markCard(knew){
+  const s=studyState;
+  if(knew) s.known++; else s.unknown++;
+  s.qi++;
+  if(s.qi>=s.cards.length) endStudy(); else showStudyCard();
+}
+
+function skipCard(){
+  studyState.qi++;
+  if(studyState.qi>=studyState.cards.length) endStudy(); else showStudyCard();
+}
+
+function endStudy(){
+  const s=studyState;
+  document.getElementById('flip-card').parentElement.style.display='none';
+  document.getElementById('know-btns').style.display='none';
+  document.getElementById('flip-cta').style.display='none';
+  document.querySelector('.flip-hint').style.display='none';
+  document.getElementById('study-prog-fill').style.width='100%';
+  document.getElementById('study-done-text').textContent=`${s.known} known · ${s.unknown} still learning`;
+  document.getElementById('study-done').style.display='block';
+}
+
+function studyAgain(wrongOnly){
+  const s=studyState;
+  loadDecks();
+  const deck=decks[s.deckIdx];
+  studyDeck(s.deckIdx, wrongOnly?null:null); // simplified: reshuffle all
+}
+
+// Init
+loadDecks();
+renderDeckGrid();
+</script>
+</body>
+</html>
