@@ -407,7 +407,7 @@ function studyDeck(i,cardsOverride){
   const deck=decks[i];
   const cards=cardsOverride||[...(deck.cards||[])].sort(()=>Math.random()-.5);
   if(!cards.length){toast('This deck has no cards!');return;}
-  studyState={deckIdx:i,cards,qi:0,known:0,unknown:0,flipped:false};
+  studyState={deckIdx:i,cards,qi:0,known:0,unknown:0,flipped:false,wrongCards:[]};
   document.getElementById('study-deck-name').textContent=deck.name;
   document.getElementById('study-done').style.display='none';
   document.getElementById('flip-card').parentElement.style.display='block';
@@ -446,7 +446,7 @@ function flipCard(){
 
 function markCard(knew){
   const s=studyState;
-  if(knew) s.known++; else s.unknown++;
+  if(knew){ s.known++; } else { s.unknown++; s.wrongCards.push(s.cards[s.qi]); }
   s.qi++;
   if(s.qi>=s.cards.length) endStudy(); else showStudyCard();
 }
@@ -469,9 +469,11 @@ function endStudy(){
 
 function studyAgain(wrongOnly){
   const s=studyState;
-  loadDecks();
-  const deck=decks[s.deckIdx];
-  studyDeck(s.deckIdx, wrongOnly?null:null); // simplified: reshuffle all
+  if(wrongOnly && s.wrongCards && s.wrongCards.length>0){
+    studyDeck(s.deckIdx, [...s.wrongCards].sort(()=>Math.random()-.5));
+  } else {
+    studyDeck(s.deckIdx, null); // reshuffle all
+  }
 }
 
 // Init
